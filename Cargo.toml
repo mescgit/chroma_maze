@@ -1,0 +1,10 @@
+[package]
+name = "chroma_maze"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+bevy = "0.13.2"
+rand = "0.8.5"
+petgraph = "0.6.4"
+bevy_prototype_lyon = "0.13.0"
