@@ -21,7 +21,7 @@ fn main() {
             ..default()
         }))
         // This is the correct API for Bevy 0.13
-        .add_state::<GameState>()
+        .init_state::<GameState>()
         .add_systems(Startup, (
             setup_camera,
             // Simple state transition for starting the game

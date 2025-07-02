@@ -78,7 +78,7 @@ fn setup_game(mut commands: Commands) {
                 (y as f32 - maze.height as f32 / 2.0) * TILE_SIZE,
                 0.0,
             );
-            
+
             let color = match tile_type {
                 TileType::Wall => Color::DARK_GRAY,
                 TileType::Floor => Color::BLACK,
@@ -119,9 +119,9 @@ fn setup_game(mut commands: Commands) {
         Stroke::new(Color::WHITE, 2.0),
         Nexus { health: 100.0 },
     ));
-    
+
     commands.insert_resource(maze);
-    
+
     println!("Game setup complete. Maze generated.");
 }
 
@@ -163,14 +163,14 @@ fn generate_maze(width: usize, height: usize) -> Maze {
             let wall_y = (cy + ny) / 2;
             tiles[wall_y * width + wall_x] = TileType::Floor;
             tiles[n_idx] = TileType::Floor;
-            
+
             visited[n_idx] = true;
             stack.push((nx, ny));
         }
     }
-    
-    // The name `new_unweighted` is correct for petgraph 0.6.4
-    let mut graph = UnGraph::new_unweighted();
+
+    // The name `new_undirected` is correct for petgraph 0.6.5
+    let mut graph = UnGraph::new_undirected();
     let mut node_map = vec![NodeIndex::end(); width * height];
 
     for y in 0..height {
