@@ -30,10 +30,55 @@ impl Plugin for GamePlugin {
             .add_systems(OnEnter(GameState::InGame), setup_game)
             .add_systems(Update, (
                 tower_targeting_system,
+                tower_shooting_system, // Added tower_shooting_system
+                enemy_death_system,    // Added enemy_death_system
                 spawn_enemies_system,
                 move_enemies_system,
-                check_nexus_health_system, // Added the new system here
+                check_nexus_health_system,
             ).run_if(in_state(GameState::InGame)));
+    }
+}
+
+fn enemy_death_system(
+    mut commands: Commands,
+    enemy_query: Query<(Entity, &Enemy)>, // Query for enemies and their health
+) {
+    for (entity, enemy) in enemy_query.iter() {
+        if enemy.health <= 0.0 {
+            commands.entity(entity).despawn();
+            println!("Enemy {:?} has been slain!", entity);
+        }
+    }
+}
+
+fn tower_shooting_system(
+    mut tower_query: Query<(Entity, &mut Tower)>, // Added Entity to identify the tower for logging
+    mut enemy_query: Query<&mut Enemy>, // Query to access and modify enemy health
+    time: Res<Time>,
+) {
+    for (tower_entity, mut tower) in tower_query.iter_mut() {
+        if let Some(target_entity) = tower.target {
+            tower.fire_timer.tick(time.delta());
+            if tower.fire_timer.just_finished() {
+                if let Ok(mut enemy) = enemy_query.get_mut(target_entity) {
+                    enemy.health -= 1.0; // Deal 1 damage for now
+                    println!(
+                        "Tower {:?} fired at {:?}. Enemy health: {}",
+                        tower_entity, target_entity, enemy.health
+                    );
+                } else {
+                    // This can happen if the enemy is despawned between targeting and shooting
+                    println!(
+                        "Tower {:?} fired at {:?}, but target was not found (likely despawned).",
+                        tower_entity, target_entity
+                    );
+                    // Optionally, clear the target if it's confirmed invalid,
+                    // though tower_targeting_system should also handle this.
+                    // tower.target = None;
+                }
+                // Timer resets automatically due to TimerMode::Repeating
+            }
+        }
     }
 }
 
@@ -73,6 +118,7 @@ struct Tower {
     fire_rate: f32,
     range: f32,
     target: Option<Entity>,
+    fire_timer: Timer, // Added fire_timer field
 }
 
 #[derive(Resource)]
@@ -162,6 +208,7 @@ fn setup_game(mut commands: Commands) {
             fire_rate: 1.0,
             range: 150.0, // Adjusted for TILE_SIZE units
             target: None,
+            fire_timer: Timer::from_seconds(1.0, TimerMode::Repeating), // Initialize fire_timer
         },
         ShapeBundle { // Using ShapeBundle for a simple visual representation
             path: GeometryBuilder::build_as(&shapes::RegularPolygon {
