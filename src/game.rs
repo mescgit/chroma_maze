@@ -69,7 +69,6 @@ struct Enemy {
 }
 
 #[derive(Component)]
-#[allow(dead_code)]
 struct Tower {
     fire_rate: f32,
     range: f32,
@@ -155,11 +154,73 @@ fn setup_game(mut commands: Commands) {
     ));
     
     commands.insert_resource(maze);
+
+    // Spawn a test tower
+    let tower_position_world = Vec3::new(0.0, 0.0, 1.0); // Example position
+    commands.spawn((
+        Tower {
+            fire_rate: 1.0,
+            range: 150.0, // Adjusted for TILE_SIZE units
+            target: None,
+        },
+        ShapeBundle { // Using ShapeBundle for a simple visual representation
+            path: GeometryBuilder::build_as(&shapes::RegularPolygon {
+                sides: 3, // Triangle
+                feature: shapes::RegularPolygonFeature::Radius(TILE_SIZE * 0.6),
+                ..shapes::RegularPolygon::default()
+            }),
+            spatial: SpatialBundle {
+                transform: Transform::from_translation(tower_position_world),
+                ..default()
+            },
+            mesh: default(),
+            material: default(),
+        },
+        Fill::color(css::YELLOW), // Removed .into()
+        Stroke::new(css::BLACK, 1.0),
+    ));
+    println!("Spawned a test tower at (0,0)");
     
     println!("Game setup complete. Maze generated.");
 }
 
-fn tower_targeting_system() { /* ... */ }
+fn tower_targeting_system(
+    mut tower_query: Query<(Entity, &mut Tower, &GlobalTransform)>,
+    enemy_query: Query<(Entity, &GlobalTransform), With<Enemy>>, // Query enemies with their transforms
+) {
+    for (_tower_entity, mut tower, tower_transform) in tower_query.iter_mut() {
+        let tower_position = tower_transform.translation();
+
+        // Check current target
+        if let Some(target_entity) = tower.target {
+            if let Ok((_enemy_entity, enemy_transform)) = enemy_query.get(target_entity) {
+                let target_position = enemy_transform.translation();
+                if tower_position.distance(target_position) > tower.range {
+                    // Target out of range
+                    tower.target = None;
+                    println!("Tower {:?} lost target {:?} (out of range)", _tower_entity, target_entity);
+                }
+                // Else, target is still valid and in range, do nothing
+            } else {
+                // Target no longer exists (e.g., despawned)
+                tower.target = None;
+                println!("Tower {:?} lost target {:?} (despawned)", _tower_entity, target_entity);
+            }
+        }
+
+        // If no target, find a new one
+        if tower.target.is_none() {
+            for (enemy_entity, enemy_transform) in enemy_query.iter() {
+                let enemy_position = enemy_transform.translation();
+                if tower_position.distance(enemy_position) <= tower.range {
+                    tower.target = Some(enemy_entity);
+                    println!("Tower {:?} acquired new target: {:?}", _tower_entity, enemy_entity);
+                    break; // Target the first enemy in range
+                }
+            }
+        }
+    }
+}
 
 fn spawn_enemies_system(
     mut commands: Commands,
