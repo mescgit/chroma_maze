@@ -32,7 +32,21 @@ impl Plugin for GamePlugin {
                 tower_targeting_system,
                 spawn_enemies_system,
                 move_enemies_system,
+                check_nexus_health_system, // Added the new system here
             ).run_if(in_state(GameState::InGame)));
+    }
+}
+
+// --- New System ---
+fn check_nexus_health_system(
+    nexus_query: Query<&Nexus>,
+    mut next_state: ResMut<NextState<GameState>>, // To change the game state
+) {
+    if let Ok(nexus) = nexus_query.get_single() {
+        if nexus.health <= 0.0 {
+            println!("Game Over! Nexus destroyed.");
+            next_state.set(GameState::GameOver);
+        }
     }
 }
 
@@ -183,11 +197,13 @@ fn spawn_enemies_system(
 }
 
 fn move_enemies_system(
-    mut query: Query<(&mut Transform, &mut Enemy)>,
+    mut commands: Commands,
+    mut enemy_query: Query<(Entity, &mut Transform, &mut Enemy)>, // Added Entity
+    mut nexus_query: Query<&mut Nexus>, // Query for Nexus
     time: Res<Time>,
     maze: Res<Maze>,
 ) {
-    for (mut transform, mut enemy) in query.iter_mut() {
+    for (enemy_entity, mut transform, mut enemy) in enemy_query.iter_mut() {
         if let Some(&next_waypoint_coords) = enemy.path.first() {
             let next_waypoint_world = Vec3::new(
                 (next_waypoint_coords.0 as f32 - maze.width as f32 / 2.0) * TILE_SIZE,
@@ -202,7 +218,12 @@ fn move_enemies_system(
                 enemy.path.remove(0);
             }
         } else {
-            // Here you would despawn the enemy and damage the nexus
+            // Enemy reached the nexus
+            commands.entity(enemy_entity).despawn();
+            if let Ok(mut nexus) = nexus_query.get_single_mut() {
+                nexus.health -= 10.0; // Decrease nexus health by 10 (arbitrary value for now)
+                println!("Nexus health: {}", nexus.health);
+            }
         }
     }
 }

@@ -8,6 +8,7 @@ pub enum GameState {
     #[default]
     MainMenu,
     InGame,
+    GameOver, // Added GameOver state
 }
 
 fn main() {
@@ -16,6 +17,7 @@ fn main() {
             primary_window: Some(Window {
                 title: "Chroma Maze".into(),
                 resolution: (1000.0, 800.0).into(),
+                present_mode: bevy::window::PresentMode::AutoNoVsync, // Try to disable vsync for headless
                 ..default()
             }),
             ..default()
@@ -27,8 +29,12 @@ fn main() {
             // Simple state transition for starting the game
             |mut next_state: ResMut<NextState<GameState>>| {
                 next_state.set(GameState::InGame);
+                println!("Switched to InGame state");
             }
         ))
+        .add_systems(OnEnter(GameState::GameOver), || {
+            println!("Entered GameOver state!");
+        })
         .add_plugins(game::GamePlugin)
         .run();
 }
