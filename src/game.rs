@@ -27,12 +27,15 @@ impl Plugin for GamePlugin {
         app
             .add_plugins(ShapePlugin)
             .insert_resource(EnemySpawnTimer(Timer::from_seconds(2.0, TimerMode::Repeating)))
-            .add_systems(OnEnter(GameState::InGame), setup_game)
+            .add_systems(OnEnter(GameState::InGame), (setup_game, setup_ui))
+            .add_systems(OnEnter(GameState::GameOver), show_game_over)
+            .add_systems(OnExit(GameState::GameOver), cleanup_game_over)
             .add_systems(Update, (
                 tower_targeting_system,
                 spawn_enemies_system,
                 move_enemies_system,
-                check_nexus_health_system, // Added the new system here
+                check_nexus_health_system,
+                update_health_text,
             ).run_if(in_state(GameState::InGame)));
     }
 }
@@ -47,6 +50,43 @@ fn check_nexus_health_system(
             println!("Game Over! Nexus destroyed.");
             next_state.set(GameState::GameOver);
         }
+    }
+}
+
+fn update_health_text(
+    nexus_query: Query<&Nexus>,
+    mut text_query: Query<&mut Text, With<HealthText>>,
+) {
+    if let Ok(nexus) = nexus_query.get_single() {
+        if let Ok(mut text) = text_query.get_single_mut() {
+            text.sections[0].value = format!("Nexus Health: {:.0}", nexus.health);
+        }
+    }
+}
+
+fn show_game_over(mut commands: Commands, asset_server: Res<AssetServer>) {
+    commands.spawn((
+        TextBundle::from_section(
+            "Game Over",
+            TextStyle {
+                font: asset_server.load("fonts/FiraSans-Bold.ttf"),
+                font_size: 60.0,
+                color: css::RED.into(),
+            },
+        )
+        .with_style(Style {
+            position_type: PositionType::Absolute,
+            top: Val::Percent(45.0),
+            left: Val::Percent(35.0),
+            ..default()
+        }),
+        GameOverText,
+    ));
+}
+
+fn cleanup_game_over(mut commands: Commands, query: Query<Entity, With<GameOverText>>) {
+    for entity in &query {
+        commands.entity(entity).despawn_recursive();
     }
 }
 
@@ -74,6 +114,12 @@ struct Tower {
     range: f32,
     target: Option<Entity>,
 }
+
+#[derive(Component)]
+pub struct HealthText;
+
+#[derive(Component)]
+pub struct GameOverText;
 
 #[derive(Resource)]
 pub struct Maze {
@@ -182,6 +228,34 @@ fn setup_game(mut commands: Commands) {
     println!("Spawned a test tower at (0,0)");
     
     println!("Game setup complete. Maze generated.");
+}
+
+fn setup_ui(mut commands: Commands, asset_server: Res<AssetServer>) {
+    commands.spawn(Camera2dBundle {
+        camera: Camera {
+            order: 1,
+            ..default()
+        },
+        ..default()
+    });
+
+    commands.spawn((
+        TextBundle::from_section(
+            "Nexus Health: 100",
+            TextStyle {
+                font: asset_server.load("fonts/FiraSans-Bold.ttf"),
+                font_size: 30.0,
+                color: Color::WHITE,
+            },
+        )
+        .with_style(Style {
+            position_type: PositionType::Absolute,
+            top: Val::Px(10.0),
+            left: Val::Px(10.0),
+            ..default()
+        }),
+        HealthText,
+    ));
 }
 
 fn tower_targeting_system(
