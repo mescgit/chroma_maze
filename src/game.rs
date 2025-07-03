@@ -30,8 +30,10 @@ impl Plugin for GamePlugin {
             .add_systems(OnEnter(GameState::InGame), setup_game)
             .add_systems(Update, (
                 tower_targeting_system,
+                tower_shooting_system,
                 spawn_enemies_system,
                 move_enemies_system,
+                enemy_death_system,
                 check_nexus_health_system, // Added the new system here
             ).run_if(in_state(GameState::InGame)));
     }
@@ -73,6 +75,7 @@ struct Tower {
     fire_rate: f32,
     range: f32,
     target: Option<Entity>,
+    fire_timer: Timer,
 }
 
 #[derive(Resource)]
@@ -162,6 +165,7 @@ fn setup_game(mut commands: Commands) {
             fire_rate: 1.0,
             range: 150.0, // Adjusted for TILE_SIZE units
             target: None,
+            fire_timer: Timer::from_seconds(1.0, TimerMode::Repeating),
         },
         ShapeBundle { // Using ShapeBundle for a simple visual representation
             path: GeometryBuilder::build_as(&shapes::RegularPolygon {
@@ -218,6 +222,28 @@ fn tower_targeting_system(
                     break; // Target the first enemy in range
                 }
             }
+        }
+    }
+}
+
+fn tower_shooting_system(
+    mut tower_query: Query<&mut Tower>,
+    mut enemy_query: Query<&mut Enemy>,
+    time: Res<Time>,
+) {
+    for mut tower in tower_query.iter_mut() {
+        if let Some(target_entity) = tower.target {
+            tower.fire_timer.tick(time.delta());
+            if tower.fire_timer.just_finished() {
+                if let Ok(mut enemy) = enemy_query.get_mut(target_entity) {
+                    enemy.health -= 5.0;
+                    println!("Tower fired at {:?}, enemy health now {}", target_entity, enemy.health);
+                } else {
+                    tower.target = None;
+                }
+            }
+        } else {
+            tower.fire_timer.reset();
         }
     }
 }
@@ -285,6 +311,15 @@ fn move_enemies_system(
                 nexus.health -= 10.0; // Decrease nexus health by 10 (arbitrary value for now)
                 println!("Nexus health: {}", nexus.health);
             }
+        }
+    }
+}
+
+fn enemy_death_system(mut commands: Commands, query: Query<(Entity, &Enemy)>) {
+    for (entity, enemy) in query.iter() {
+        if enemy.health <= 0.0 {
+            commands.entity(entity).despawn();
+            println!("Enemy {:?} destroyed", entity);
         }
     }
 }
