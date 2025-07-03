@@ -3,8 +3,10 @@ name = "chroma_maze"
 version = "0.1.0"
 edition = "2021"
 
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
 [dependencies]
-bevy = "0.13.2"
+bevy = "0.14.0" # Upgraded to the latest stable version
 rand = "0.8.5"
-petgraph = "0.6.5"
-bevy_prototype_lyon = "0.13.0"
+petgraph = "0.6.5" # Updated petgraph
+bevy_prototype_lyon = "0.12.0" # A version compatible with Bevy 0.14

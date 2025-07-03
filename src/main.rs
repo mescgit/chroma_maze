@@ -20,7 +20,7 @@ fn main() {
             }),
             ..default()
         }))
-        // This is the correct API for Bevy 0.13
+        // The correct method for Bevy 0.14 is init_state
         .init_state::<GameState>()
         .add_systems(Startup, (
             setup_camera,

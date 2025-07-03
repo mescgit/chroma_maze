@@ -1,0 +1,111 @@
+Phase 1: Core Gameplay Loop
+
+This phase is about creating a complete, albeit simple, game loop. A player should be able to win or lose.
+
+    Nexus Health & Game Over:
+
+        Goal: Make the enemies deal damage to the nexus, leading to a "Game Over" state.
+
+        Steps:
+
+            In the move_enemies_system in src/game.rs, when an enemy reaches the end of its path, despawn the enemy entity.
+
+            When an enemy is despawned at the nexus, decrease the health of the Nexus component.
+
+            Create a system that checks the nexus's health each frame. If health is zero or less, transition to a new GameOver state. You will need to add this new state to the GameState enum in src/main.rs.
+
+    Basic Tower & Targeting:
+
+        Goal: Allow the player to place a single type of tower that can find a target.
+
+        Steps:
+
+            Implement a basic way to place a tower. For now, you could simply spawn one in a fixed location in your setup_game system just for testing.
+
+            Implement the tower_targeting_system in src/game.rs. This system should:
+
+                Query for all towers and all enemies.
+
+                For each tower, iterate through enemies to find one that is within its range.
+
+                If a target is found, store its Entity ID in the tower's target field. If the target goes out of range or is destroyed, clear the target field.
+
+    Shooting & Enemy Health:
+
+        Goal: Make towers shoot and destroy enemies.
+
+        Steps:
+
+            Create a new system, e.g., tower_shooting_system.
+
+            This system will query for towers that have a target.
+
+            Use a Timer on each Tower component to manage its fire_rate. When the timer finishes, the tower "shoots."
+
+            When a tower shoots, decrease the health of its target Enemy.
+
+            Create another system that checks for enemies with zero or less health and despawns them.
+
+Phase 2: Player Interaction & UI
+
+This phase is about making the game truly interactive.
+
+    Player Input for Tower Placement:
+
+        Goal: Allow the player to click on a valid maze tile to place a tower.
+
+        Steps:
+
+            Create a system that reads mouse click events.
+
+            Convert the mouse's screen position to a world position, and then to a maze grid coordinate.
+
+            Check if the selected tile is a TileType::Wall. If it is, spawn a Tower entity at that location.
+
+    Basic UI:
+
+        Goal: Display essential information to the player.
+
+        Steps:
+
+            Display the Nexus health on screen.
+
+            Display a "Game Over" message when the game ends.
+
+            (Optional) Display the player's currency for building towers.
+
+Phase 3: Expanding Gameplay
+
+Once you have a full gameplay loop, you can add depth and variety.
+
+    Economy:
+
+        Goal: Introduce a currency system for buying towers.
+
+        Steps:
+
+            Create a PlayerCurrency resource.
+
+            Give the player currency for each enemy they destroy.
+
+            Make tower placement cost currency.
+
+    Multiple Waves & Difficulty:
+
+        Goal: Make the game progressively more challenging.
+
+        Steps:
+
+            Create a "wave" system. Instead of spawning enemies continuously, spawn them in numbered waves with breaks in between.
+
+            Increase the number and health of enemies in subsequent waves.
+
+    More Content:
+
+        Goal: Add variety to keep the game interesting.
+
+        Steps:
+
+            Different Tower Types: Create new tower components with different stats (e.g., a fast-firing, low-damage tower vs. a slow, high-damage area-of-effect tower).
+
+            Different Enemy Types: Create enemies with different speeds and health.

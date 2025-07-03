@@ -5,6 +5,8 @@ use petgraph::graph::{NodeIndex, UnGraph};
 use petgraph::algo::astar;
 use rand::seq::SliceRandom;
 use rand::thread_rng;
+// Import the new color palettes
+use bevy::color::palettes::css;
 
 use crate::GameState;
 
@@ -13,6 +15,10 @@ const MAP_WIDTH: usize = 40;
 const MAP_HEIGHT: usize = 30;
 const TILE_SIZE: f32 = 20.0;
 
+// --- New Resource ---
+#[derive(Resource)]
+struct EnemySpawnTimer(Timer);
+
 // --- Plugin ---
 pub struct GamePlugin;
 
@@ -20,9 +26,12 @@ impl Plugin for GamePlugin {
     fn build(&self, app: &mut App) {
         app
             .add_plugins(ShapePlugin)
+            .insert_resource(EnemySpawnTimer(Timer::from_seconds(2.0, TimerMode::Repeating)))
             .add_systems(OnEnter(GameState::InGame), setup_game)
             .add_systems(Update, (
                 tower_targeting_system,
+                spawn_enemies_system,
+                move_enemies_system,
             ).run_if(in_state(GameState::InGame)));
     }
 }
@@ -33,17 +42,20 @@ struct MazeTile;
 
 #[derive(Component)]
 struct Nexus {
+    #[allow(dead_code)]
     health: f32,
 }
 
 #[derive(Component)]
+#[allow(dead_code)]
 struct Enemy {
     speed: f32,
     health: f32,
-    path: Vec<NodeIndex>,
+    path: Vec<(usize, usize)>,
 }
 
 #[derive(Component)]
+#[allow(dead_code)]
 struct Tower {
     fire_rate: f32,
     range: f32,
@@ -55,9 +67,13 @@ pub struct Maze {
     pub width: usize,
     pub height: usize,
     pub tiles: Vec<TileType>,
+    #[allow(dead_code)]
     pub graph: UnGraph<(), ()>,
+    #[allow(dead_code)]
     pub entrance: (usize, usize),
     pub nexus_pos: (usize, usize),
+    // Added the node_map field here
+    pub node_map: Vec<NodeIndex>,
 }
 
 #[derive(Clone, Copy, PartialEq, Debug)]
@@ -78,10 +94,10 @@ fn setup_game(mut commands: Commands) {
                 (y as f32 - maze.height as f32 / 2.0) * TILE_SIZE,
                 0.0,
             );
-
+            
             let color = match tile_type {
-                TileType::Wall => Color::DARK_GRAY,
-                TileType::Floor => Color::BLACK,
+                TileType::Wall => css::DARK_GRAY.into(),
+                TileType::Floor => css::BLACK.into(),
             };
 
             commands.spawn((
@@ -112,20 +128,85 @@ fn setup_game(mut commands: Commands) {
                 feature: shapes::RegularPolygonFeature::Radius(TILE_SIZE * 0.8),
                 ..shapes::RegularPolygon::default()
             }),
-            transform: Transform::from_translation(nexus_pos_world),
-            ..default()
+            spatial: SpatialBundle {
+                transform: Transform::from_translation(nexus_pos_world),
+                ..default()
+            },
+            mesh: default(),
+            material: default(),
         },
-        Fill::color(Color::CYAN),
-        Stroke::new(Color::WHITE, 2.0),
+        Fill::color(css::AQUA),
+        Stroke::new(css::WHITE, 2.0),
         Nexus { health: 100.0 },
     ));
-
+    
     commands.insert_resource(maze);
-
+    
     println!("Game setup complete. Maze generated.");
 }
 
 fn tower_targeting_system() { /* ... */ }
+
+fn spawn_enemies_system(
+    mut commands: Commands,
+    time: Res<Time>,
+    mut spawn_timer: ResMut<EnemySpawnTimer>,
+    maze: Res<Maze>,
+) {
+    if spawn_timer.0.tick(time.delta()).just_finished() {
+        if let Some(path) = find_path(&maze, maze.entrance, maze.nexus_pos) {
+            let start_pos_world = Vec3::new(
+                (maze.entrance.0 as f32 - maze.width as f32 / 2.0) * TILE_SIZE,
+                (maze.entrance.1 as f32 - maze.height as f32 / 2.0) * TILE_SIZE,
+                1.0,
+            );
+
+            commands.spawn((
+                Enemy {
+                    speed: 50.0,
+                    health: 10.0,
+                    path,
+                },
+                SpriteBundle {
+                    sprite: Sprite {
+                        color: css::RED.into(),
+                        custom_size: Some(Vec2::new(TILE_SIZE * 0.7, TILE_SIZE * 0.7)),
+                        ..default()
+                    },
+                    transform: Transform::from_translation(start_pos_world),
+                    ..default()
+                }
+            ));
+            println!("Spawned an enemy!");
+        }
+    }
+}
+
+fn move_enemies_system(
+    mut query: Query<(&mut Transform, &mut Enemy)>,
+    time: Res<Time>,
+    maze: Res<Maze>,
+) {
+    for (mut transform, mut enemy) in query.iter_mut() {
+        if let Some(&next_waypoint_coords) = enemy.path.first() {
+            let next_waypoint_world = Vec3::new(
+                (next_waypoint_coords.0 as f32 - maze.width as f32 / 2.0) * TILE_SIZE,
+                (next_waypoint_coords.1 as f32 - maze.height as f32 / 2.0) * TILE_SIZE,
+                transform.translation.z,
+            );
+
+            let direction = (next_waypoint_world - transform.translation).normalize_or_zero();
+            transform.translation += direction * enemy.speed * time.delta_seconds();
+
+            if transform.translation.distance(next_waypoint_world) < 1.0 {
+                enemy.path.remove(0);
+            }
+        } else {
+            // Here you would despawn the enemy and damage the nexus
+        }
+    }
+}
+
 
 // --- Maze Generation Logic ---
 fn generate_maze(width: usize, height: usize) -> Maze {
@@ -163,13 +244,12 @@ fn generate_maze(width: usize, height: usize) -> Maze {
             let wall_y = (cy + ny) / 2;
             tiles[wall_y * width + wall_x] = TileType::Floor;
             tiles[n_idx] = TileType::Floor;
-
+            
             visited[n_idx] = true;
             stack.push((nx, ny));
         }
     }
-
-    // The name `new_undirected` is correct for petgraph 0.6.5
+    
     let mut graph = UnGraph::new_undirected();
     let mut node_map = vec![NodeIndex::end(); width * height];
 
@@ -204,8 +284,34 @@ fn generate_maze(width: usize, height: usize) -> Maze {
        tiles[nexus_pos.1 * width + nexus_pos.0] = TileType::Floor;
     }
 
-    Maze { width, height, tiles, graph, entrance, nexus_pos }
+    // Now we return the node_map as part of the Maze struct
+    Maze { width, height, tiles, graph, entrance, nexus_pos, node_map }
 }
 
-// Prefixing `maze` with an underscore to silence the unused variable warning
-fn find_path_example(_maze: &Maze) { /* ... */ }
+// A helper function to find a path through the maze.
+fn find_path(
+    maze: &Maze,
+    start_pos: (usize, usize),
+    end_pos: (usize, usize),
+) -> Option<Vec<(usize, usize)>> {
+    let start_node = maze.node_map[start_pos.1 * maze.width + start_pos.0];
+    let end_node = maze.node_map[end_pos.1 * maze.width + end_pos.0];
+
+    let result = astar(
+        &maze.graph,
+        start_node,
+        |finish| finish == end_node,
+        |_| 1,
+        |_| 0,
+    );
+
+    if let Some((_cost, path_indices)) = result {
+        let path_coords = path_indices.into_iter().map(|node_idx| {
+            let flat_index = maze.node_map.iter().position(|&n| n == node_idx).unwrap();
+            (flat_index % maze.width, flat_index / maze.width)
+        }).collect();
+        Some(path_coords)
+    } else {
+        None
+    }
+}
